@@ -1,0 +1,153 @@
+config:
+    # Only generate Beam Transfers.
+    beamtransfers:      Yes
+    kltransform:        Yes
+    psfisher:           No
+
+    output_directory:   hirax/drift_prod_hirax_survey
+
+    svcut: 1e-6
+    polsvcut: 1e-6
+
+telescope:
+    type:
+        class:  HIRAXSurvey
+        module: hirax_transfer.core
+
+    # Set the elevation pointings of a HIRAX survey
+    pointing_start: 0.
+    pointing_stop: 1.
+    npointings: 1
+
+    hirax_spec:
+        # Set band parameters:
+        freq_lower: 600.
+        freq_upper: 600.4
+        num_freq: 2
+        freq_mode: edge
+
+        # Other parameters (See drift.core.telescope)
+        auto_correlations: Yes
+        tsys_flat: 50.0
+#        redundancy_boost: 40.0 # Approx a 1024 element array
+        dish_width: 6.0
+        lmax: 40
+        mmax: 40
+        ndays: 10 # When noise weighting is needed, will assume an integration
+                   # time of this many days.
+
+        hirax_layout: # See hirax_transfer.layouts
+            type: square_grid
+            spacing: 6.0
+            grid_size: 2
+
+        hirax_beam: # See hirax_transfer.beams
+            type: gaussian
+            diameter: 6.0
+            fwhm_factor: 1.0
+#            filename: /srv/beegfs/scratch/users/n/nistanev/secret_hirax_directory/cst_beams/cst_beam_export_hirax_dish_v4_feed_column_full_nside_256_32bands.h5
+
+## KL transform configuration
+## Set up the KL-filters that will be generated (there can be multiple ones as listed below).
+kltransform:
+
+    - type: DoubleKL    #1
+      name: dk_5thresh_fg_10thresh
+      inverse: Yes  
+      threshold: 5
+      use_thermal: Yes
+      use_foregrounds: Yes
+      use_polarised: Yes
+      foreground_threshold: 10
+
+
+psfisher:
+    -   type:           MonteCarlo    #1
+        name:           psmc_dk_5thresh_fg_10thresh_1threshold
+        klname:         dk_5thresh_fg_10thresh
+        threshold:      1
+        bandtype:       cartesian
+        kpar_bands:
+        -   spacing:    linear
+            start:      0.03
+            stop:       0.30                   
+            num:        14
+        
+        kperp_bands:
+        -   spacing:    linear
+            start:      0.03
+            stop:       0.10                   #corresponds to l=426
+            num:        9
+
+pipeline_vis:
+    tasks:
+        -   type:       draco.core.task.SetMPILogging
+
+        -   type:       draco.core.io.LoadProductManager
+            out:        pm
+            params:
+              product_directory: "hirax/drift_prod_hirax_survey"
+
+        -   type:       draco.core.io.LoadMaps
+            out:        smap
+            params:
+                maps:
+                  - files:
+                    - "21cm.h5"
+
+        -   type:       draco.synthesis.stream.SimulateSidereal
+            requires:   pm
+            in:         smap
+            out:        sstream
+            params:
+              ndays: 1
+              save:   Yes
+              output_root: "./hirax/draco/sstream_signal_"
+
+pipeline_ps:
+    tasks:
+        -   type:       draco.core.task.SetMPILogging
+
+        -   type:       draco.core.io.LoadProductManager
+            out:        pm
+            params:
+                product_directory:  './hirax/drift_prod_hirax_survey_49elem_7point_64bands'
+
+        -   type:       draco.core.io.LoadFilesFromParams
+            out:        sidereal_collated
+            params:
+              files:
+                - './hirax/draco/sstream_wnoise_group_0.h5'
+
+        -   type:       draco.analysis.transform.MModeTransform
+            requires:   pm
+            in:         sidereal_collated
+            out:        mmodes
+
+        -   type:       draco.analysis.fgfilter.SVDModeProject
+            requires:   pm
+            in:         mmodes
+            out:        svdmodes
+
+# dk_5thresh_fg_10thresh ------ 1
+
+        -   type:       draco.analysis.fgfilter.KLModeProject
+            requires:   pm
+            in:         svdmodes
+            out:        klmodes_dk_5thresh_fg_10thresh
+            params:
+                klname: dk_5thresh_fg_10thresh 
+                threshold: 1.0
+
+        -   type:       draco.analysis.powerspectrum.QuadraticPSEstimation
+            requires:   pm
+            in:         klmodes_dk_5thresh_fg_10thresh
+            out:        psmc_uw_dk_5thresh_fg_10thresh
+            params:
+                psname: psmc_dk_5thresh_fg_10thresh_1threshold
+                pstype: unwindowed # unwindowed, uncorrelated, minimum_variance
+                save:   Yes
+                output_root: './hirax/draco/psmc_unwindowed_wnoise_fgfilter_dk_5thresh_fg_10thresh_'
+
+
+
