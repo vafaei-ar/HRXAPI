@@ -17,6 +17,18 @@ from sys import argv
 from drift.core import manager
 from caput.pipeline import Manager
 
+import pylab as plt
+
+def plot_confing(fname,keys,values):
+    fig, ax =plt.subplots(1,1,figsize=(12,4))
+    ax.axis('tight')
+    ax.axis('off')
+    collabel=("keys", "valurs")
+    the_table = ax.table(cellText=np.c_[keys,values],colLabels=collabel,loc='center')
+    plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+    plt.savefig(fname+'.png')
+
+
 class MyDumper(yaml.Dumper):
     def increase_indent(self, flow=False, indentless=False):
         return super(MyDumper, self).increase_indent(flow, False)
@@ -77,10 +89,34 @@ class SimPipline:
         self.freqstart = freqstart
         self.freqend = freqend
         self.nchannels = nchannels
-        
         self.thresh_list = thresh_list
         
         ch_mkdir(self.prefix+'/logs/')
+        
+        keys = ['prefix','pointing_start','pointing_stop','npointings',
+                'lmax','mmax','nside','ndays','grid_size',
+                'freqstart','freqend','nchannels']
+                
+        values = [prefix,pointing_start,pointing_stop,npointings,
+                  lmax,mmax,nside,ndays,grid_size,
+                  freqstart,freqend,nchannels]
+        
+#        df = pd.DataFrame(columns=['value'])
+#        df.loc['prefix'] = prefix
+#        df.loc['pointing_start'] = pointing_start
+#        df.loc['pointing_stop'] = pointing_stop
+#        df.loc['npointings'] = npointings
+#        df.loc['lmax'] = lmax
+#        df.loc['mmax'] = mmax
+#        df.loc['nside'] = nside
+#        df.loc['ndays'] = ndays
+#        df.loc['grid_size'] = grid_size
+#        df.loc['freqstart'] = freqstart
+#        df.loc['freqend'] = freqend
+#        df.loc['nchannels'] = nchannels
+        
+        plot_confing(self.prefix+'/logs/telescope_config',keys,values)
+
 
     def dritf_init(self,prod_dir=None):
         self.yconf = deepcopy(self.yconforig)
@@ -100,7 +136,7 @@ class SimPipline:
         self.yconf['telescope']['hirax_spec']['freq_lower'] = self.freqstart
         self.yconf['telescope']['hirax_spec']['freq_upper'] = self.freqend
         self.yconf['telescope']['hirax_spec']['num_freq'] = self.nchannels
-
+        
         d1_temp = deepcopy(self.yconf['kltransform'][0])
         d2_temp = deepcopy(self.yconf['psfisher'][0])
 
